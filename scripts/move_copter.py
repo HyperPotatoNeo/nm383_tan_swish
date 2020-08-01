@@ -6,6 +6,8 @@ from geometry_msgs.msg import PoseStamped
 import time
 from math import pow, sqrt
 from visualization_msgs.msg import Marker
+from geometry_msgs.msg import Point32
+from sensor_msgs.msg import PointCloud
 
 
 class DronePose():
@@ -18,12 +20,13 @@ class DronePose():
         return sqrt(pow((self.x - x), 2) + pow((self.y - y), 2) + pow((self.z - z), 2))
 
 
-THRESHOLD_DISTANCE = 5.0
+THRESHOLD_DISTANCE = 1.0
 first_goal = True
 nav_goal = None
 
 goalArray = []
 dronePose = DronePose()
+pointCloud = PointCloud()
 
 
 def drone_path_callback(data):
@@ -40,34 +43,25 @@ publisher = None
 def drone_pose_callback(data):
     global count
     global dronePose
+    global pointCloud
+
     dronePose.x = data.position.x
     dronePose.y = data.position.y
     dronePose.z = data.position.z
-    ellipse = Marker()
-    ellipse.id = count
-    ellipse.header.frame_id = "map"
-    ellipse.header.stamp = rospy.Time.now()
-    ellipse.type = Marker.CUBE
-    ellipse.action = Marker.ADD
-    ellipse.pose.position.x = dronePose.x
-    ellipse.pose.position.y = dronePose.y
-    ellipse.pose.position.z = dronePose.z
-    ellipse.pose.orientation.x = 0
-    ellipse.pose.orientation.y = 0
-    ellipse.pose.orientation.z = 0
-    ellipse.pose.orientation.w = 1
-    ellipse.scale.x = 0.5
-    ellipse.scale.y = 0.5
-    ellipse.scale.z = 0.1
-    ellipse.color.a = 1.0
-    ellipse.color.r = 1.0
-    ellipse.color.g = 1.0
-    ellipse.color.b = 1.0
-    ellipse.lifetime = rospy.Duration.from_sec(10000)
+
+    if(count % 5000 == 0):
+        pointCloud.header.frame_id = "map"
+        pointCloud.header.stamp = rospy.Time.now()
+        point = Point32()
+        point.x = dronePose.x
+        point.y = dronePose.y
+        point.z = dronePose.z
+        pointCloud.points.append(point)
+
     count += 1
 
-    # Publish the MarkerArray
-    publisher.publish(ellipse)
+    # Publish the PointCloud
+    publisher.publish(pointCloud)
 
 firefly_pub = None
 def sendGoal(goal):
@@ -83,7 +77,7 @@ def sendGoal(goal):
     waypoint.pose.orientation.z = 0.0
     waypoint.pose.orientation.w = 1.0
 
-    # print("Moving firefly to X: {}, Y: {}, Z: {}".format(waypoint.pose.position.x, waypoint.pose.position.y, waypoint.pose.position.z))
+    print("Moving firefly to X: {}, Y: {}, Z: {}".format(waypoint.pose.position.x, waypoint.pose.position.y, waypoint.pose.position.z))
 
     firefly_pub.publish(waypoint)
 
@@ -94,27 +88,25 @@ def navigate_drone():
     global first_goal
     global nav_goal
     if goalArray:
-        # print('here', len(goalArray))
+        print('here', len(goalArray))
         if first_goal:
             nav_goal = goalArray[0]
             sendGoal(nav_goal)
-            # print(goalArray)
+            print(goalArray)
             goalArray = goalArray[1:]
             first_goal = False
         else:
             distance = dronePose.calculateDistance(nav_goal.position.x, nav_goal.position.y, nav_goal.position.z)
-            # print("Distance to waypoint: {}".format(distance))
+            print("Distance to waypoint: {}".format(distance))
             if distance < THRESHOLD_DISTANCE:
                 nav_goal = goalArray[0]
                 sendGoal(nav_goal)
                 goalArray = goalArray[1:]
 
 if __name__ == "__main__":
-    global THRESHOLD_DISTANCE
     rospy.init_node("tan_swish")
-    THRESHOLD_DISTANCE = rospy.get_param("~speed")
     rate = rospy.Rate(5)
     firefly_pub = rospy.Publisher("/firefly/command/pose", PoseStamped, queue_size=10)
-    publisher = rospy.Publisher("/firefly/covers", Marker, queue_size=10)
+    publisher = rospy.Publisher("/firefly/covers", PointCloud, queue_size=10)
     sub = rospy.Subscriber("/path/firefly", PoseArray, drone_path_callback)
     rospy.spin()
