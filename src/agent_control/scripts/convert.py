@@ -4,6 +4,9 @@ import numpy as np
 import yaml
 import shapefile
 import pngcanvas
+import lxml
+import xml.etree.ElementTree as ET
+from bs4 import BeautifulSoup
 
 # Open shapefile with Python Shapefile Library
 shapefile_name = 'map' # e.g. england_oa_2001
@@ -73,6 +76,22 @@ class MapFiller:
 
         cv2.imwrite("result.png", im_floodfill)
 
+        inverted_image = cv2.bitwise_not(im_floodfill)
+        cv2.imwrite(os.path.expanduser("~/.gazebo/models/shape_map/materials/textures/shape_map.png"), inverted_image)
+
+        model_path = os.path.expanduser("~/.gazebo/models/shape_map/model.sdf")
+
+        tree = ET.parse(model_path)
+        root = tree.getroot()
+
+        for child in root.iter("size"):
+            child.text = "{} {}".format(w/40, h/40)
+
+        output_str = BeautifulSoup(ET.tostring(root), "xml").prettify()
+        with open(model_path, "w") as f:
+            f.write(output_str)
+
+
 
 filler = MapFiller()
 img = cv2.imread("map.png", cv2.IMREAD_GRAYSCALE)
@@ -81,12 +100,12 @@ filler.fill(img)
 resolution = 0.02
 
 doc = {
-	'origin': [-img.shape[1]*resolution/2, -img.shape[0]*resolution/2, 0.0], 
-	'free_thresh': 0.196,
-	'occupied_thresh': 0.65, 
-	'negate': 1, 
-	'image': 'result.png', 
-	'resolution': resolution
+    'origin': [-img.shape[1]*resolution/2, -img.shape[0]*resolution/2, 0.0],
+    'free_thresh': 0.196,
+    'occupied_thresh': 0.65,
+    'negate': 1,
+    'image': 'result.png',
+    'resolution': resolution
 }
 
 with open("map.yaml", "wr") as file:
