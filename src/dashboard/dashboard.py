@@ -7,6 +7,7 @@ import Tkinter as tk
 import thread as thread
 import time
 from math import sqrt
+import sys
 
 dashboard = None
 start_time = None
@@ -24,31 +25,36 @@ def callback(data):
     dashboard.setEstimatedTime(percent)
 
     # firefly percent area
-    percent = droneInfo["firefly"].get("percent_area", 0)
-    dashboard.setAreaCovered(0, round((percent * 100), 2))
+    if dashboard.n_drones -1 >= 0:
+        percent = droneInfo["firefly"].get("percent_area", 0)
+        dashboard.setAreaCovered(0, round((percent * 100), 2))
 
     # pelican percent area
-    percent = droneInfo["pelican"].get("percent_area", 0)
-    dashboard.setAreaCovered(1, round((percent * 100), 2))
+    if dashboard.n_drones -1 >= 1:
+        percent = droneInfo["pelican"].get("percent_area", 0)
+        dashboard.setAreaCovered(1, round((percent * 100), 2))
 
     # hummingbird percent area
-    percent = droneInfo["hummingbird"].get("percent_area", 0)
-    dashboard.setAreaCovered(2, round((percent * 100), 2))
+    if dashboard.n_drones -1 >= 2:
+        percent = droneInfo["hummingbird"].get("percent_area", 0)
+        dashboard.setAreaCovered(2, round((percent * 100), 2))
 
     # iris percent area
-    percent = droneInfo["iris"].get("percent_area", 0)
-    dashboard.setAreaCovered(3, round((percent * 100), 2))
+    if dashboard.n_drones -1 >= 3:
+        percent = droneInfo["iris"].get("percent_area", 0)
+        dashboard.setAreaCovered(3, round((percent * 100), 2))
 
     # neo9 percent area
-    percent = droneInfo["neo9"].get("percent_area", 0)
-    dashboard.setAreaCovered(4, round((percent * 100), 2))
+    if dashboard.n_drones -1 >= 4:
+        percent = droneInfo["neo9"].get("percent_area", 0)
+        dashboard.setAreaCovered(4, round((percent * 100), 2))
 
     seconds = (rospy.Time.now() - start_time).secs
     dashboard.setTimeTaken("{} minues {} seconds".format(seconds/60, seconds%60))
 
 
 def battery_callback(msg, id):
-    dashboard.setBatteryPercentage(id, round(msg.data, 2))
+    dashboard.setBatteryPercentage(id, round(msg.data, 1))
 
 def distance_callback(msg, id):
     dashboard.setDistanceTravelled(id, round(msg.data, 2))
@@ -121,7 +127,7 @@ class TopBar(tk.Frame):
         self.areaWidget = TotalAreaCoveredWidget(self, padx=30, pady=30, bg=COLOR_WHITE)
         self.areaWidget.label['bg'] = COLOR_WHITE
         self.areaWidget.area['bg'] = COLOR_WHITE
-        self.areaWidget.grid(row=0, column=0)
+        self.areaWidget.grid(row=0, column=0, sticky=tk.W)
 
         self.commonWidget = CommonInfoWidget(self, padx=30, pady=30, bg=COLOR_GREY)
         self.commonWidget.overlap['bg'] = COLOR_GREY
@@ -227,7 +233,7 @@ class DroneInfoWidget(tk.Frame):
 
         self.batteryPercentVar = tk.StringVar()
         self.batteryPercentVar.set("0%")
-        self.batteryPercent = tk.Label(self, textvariable=self.batteryPercentVar, font=getDefaultFont("18"), bg=bgLabels)
+        self.batteryPercent = tk.Label(self, textvariable=self.batteryPercentVar, font=getDefaultFont("15"), bg=bgLabels)
         self.batteryPercent.grid(row=8, column=1)
 
     def setAreaCovered(self, area):
@@ -259,7 +265,7 @@ class DroneCollection(tk.Frame):
 
         self.drones = []
         for i in range(n_drones):
-            self.drones.append(DroneInfoWidget(i+1, COLOR_GREY, self, padx=10, pady=5,  bg=COLOR_GREY))
+            self.drones.append(DroneInfoWidget(i+1, COLOR_GREY, self, padx=10, pady=5, bg=COLOR_GREY))
             self.drones[i].grid(row=0, column=i, padx=5)
             self.columnconfigure(i, weight=1)
     
@@ -292,8 +298,8 @@ class Dashboard:
         self.topbar = TopBar(app, padx=30, pady=30, bg=COLOR_WHITE)
         self.topbar.pack(side=tk.TOP, fill=tk.X)
 
-        self.droneCollection = DroneCollection(n_drones, app, padx=30, pady=30, bg=COLOR_WHITE)
-        self.droneCollection.pack(side=tk.BOTTOM, fill=tk.X)
+        self.droneCollection = DroneCollection(n_drones, app, padx=30, pady=0, bg=COLOR_WHITE)
+        self.droneCollection.pack(side=tk.TOP, fill=tk.X)
 
     def setTotalAreaCovered(self, area):
         self.topbar.setTotalAreaCovered(area)
@@ -333,29 +339,39 @@ if __name__ == '__main__':
     rospy.init_node('dashboard', anonymous=True)
     start_time = rospy.Time.now()
 
+    drone_count = 5
+    try:
+        drone_count = int(sys.argv[1])
+        if(drone_count > 5):
+            drone_count = 5
+    except:
+        drone_count = 5
+
     app = tk.Tk()
     app.title("Dashboard")
-    app.geometry("1152x700")
-    dashboard = Dashboard(app, 5)
+    app.geometry("1152x570")
+    dashboard = Dashboard(app, drone_count)
 
     rospy.Subscriber("/drone_coverage_metrics", String, callback)
-
-    rospy.Subscriber("/firefly/battery", Float32, battery_callback, 0)
-    rospy.Subscriber("/pelican/battery", Float32, battery_callback, 1)
-    rospy.Subscriber("/hummingbird/battery", Float32, battery_callback, 2)
-    rospy.Subscriber("/iris/battery", Float32, battery_callback, 3)
-    rospy.Subscriber("/neo9/battery", Float32, battery_callback, 4)
-
-    rospy.Subscriber("/firefly/distance_travelled", Float32, distance_callback, 0)
-    rospy.Subscriber("/pelican/distance_travelled", Float32, distance_callback, 1)
-    rospy.Subscriber("/hummingbird/distance_travelled", Float32, distance_callback, 2)
-    rospy.Subscriber("/iris/distance_travelled", Float32, distance_callback, 3)
-    rospy.Subscriber("/neo9/distance_travelled", Float32, distance_callback, 4)
-
-    rospy.Subscriber("/firefly/ground_truth/odometry", Odometry, odom_callback, 0)
-    rospy.Subscriber("/pelican/ground_truth/odometry", Odometry, odom_callback, 1)
-    rospy.Subscriber("/hummingbird/ground_truth/odometry", Odometry, odom_callback, 2)
-    rospy.Subscriber("/iris/ground_truth/odometry", Odometry, odom_callback, 3)
-    rospy.Subscriber("/neo9/ground_truth/odometry", Odometry, odom_callback, 4)
+    if drone_count - 1 >= 0:
+        rospy.Subscriber("/firefly/battery", Float32, battery_callback, 0)
+        rospy.Subscriber("/firefly/distance_travelled", Float32, distance_callback, 0)
+        rospy.Subscriber("/firefly/ground_truth/odometry", Odometry, odom_callback, 0)
+    if drone_count - 1 >= 1:
+        rospy.Subscriber("/pelican/battery", Float32, battery_callback, 1)
+        rospy.Subscriber("/pelican/distance_travelled", Float32, distance_callback, 1)
+        rospy.Subscriber("/pelican/ground_truth/odometry", Odometry, odom_callback, 1)
+    if drone_count - 1 >= 2:
+        rospy.Subscriber("/hummingbird/battery", Float32, battery_callback, 2)
+        rospy.Subscriber("/hummingbird/distance_travelled", Float32, distance_callback, 2)
+        rospy.Subscriber("/hummingbird/ground_truth/odometry", Odometry, odom_callback, 2)
+    if drone_count - 1 >= 3:
+        rospy.Subscriber("/iris/battery", Float32, battery_callback, 3)
+        rospy.Subscriber("/iris/distance_travelled", Float32, distance_callback, 3)
+        rospy.Subscriber("/iris/ground_truth/odometry", Odometry, odom_callback, 3)
+    if drone_count - 1 >= 4:
+        rospy.Subscriber("/neo9/battery", Float32, battery_callback, 4)
+        rospy.Subscriber("/neo9/distance_travelled", Float32, distance_callback, 4)
+        rospy.Subscriber("/neo9/ground_truth/odometry", Odometry, odom_callback, 4)
 
     app.mainloop()
