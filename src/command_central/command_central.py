@@ -1,6 +1,8 @@
 from __future__ import print_function
 import Tkinter as tk
 from PIL import Image, ImageTk
+import os
+import sys
 
 COLOR_GREY = '#F9F9F9'
 COLOR_WHITE = '#FFFFFF'
@@ -99,7 +101,7 @@ class DroneGroup(tk.Frame):
         return self.drones[id].getSpeed()
     
     def getRange(self, id):
-        return self.drones[id].getSpeed()
+        return self.drones[id].getRange()
 
 
 class CommandCentral:
@@ -119,7 +121,7 @@ class CommandCentral:
 
         self.tkImg = ImageTk.PhotoImage(self.img)
 
-        self.tan_swish = tk.Label(app, image=self.tkImg, bg=COLOR_GREY)
+        self.tan_swish = tk.Label(app, image=self.tkImg)
         self.tan_swish.img = self.tkImg
         self.tan_swish.grid(row=0, column=1, sticky='nsew')
 
@@ -151,12 +153,32 @@ class CommandCentral:
         return self.droneGroup.getRange(id)
     
 def callback(central):
-    print("HELLO")
+    command = 'roslaunch tan_swish multicopter.launch drone_count:=' + str(central.n_drones) + ' fov:=' + str(central.getFOV()) + ' overlap:="' + str(central.getOverlap()) + '" recharge_stations:="[' + str(central.getRechargeX()) + ', ' + str(central.getRechargeY()) + ']"'
+    if (central.n_drones >= 1):
+        command += ' firefly_speed:=' + central.getSpeed(0) + ' firefly_range:=' + central.getRange(0)
+    if (central.n_drones >= 2):
+        command += ' pelican_speed:=' + central.getSpeed(1) + ' pelican_range:=' + central.getRange(1)
+    if (central.n_drones >= 3):
+        command += ' hummingbird_speed:=' + central.getSpeed(2) + ' hummingbird_range:=' + central.getRange(2)
+    if (central.n_drones >= 4):
+        command += ' iris_speed:=' + central.getSpeed(3) + ' iris_range:=' + central.getRange(3)
+    if (central.n_drones >= 5):
+        command += ' neo9_speed:=' + central.getSpeed(4) + ' neo9_range:=' + central.getRange(4)
+    print(command)
+    os.system(command)
 
 if __name__ == '__main__':
+    drone_count = 5
+    try:
+        drone_count = int(sys.argv[1])
+        if(drone_count > 5):
+            drone_count = 5
+    except:
+        drone_count = 5
+
     app = tk.Tk()
     app.geometry('1400x700')
-    central = CommandCentral(app, 5)
+    central = CommandCentral(app, drone_count)
     central.setCallback(lambda: callback(central))
     app.mainloop()
 
