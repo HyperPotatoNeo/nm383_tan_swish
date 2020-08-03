@@ -1,18 +1,59 @@
 #!/usr/bin/env python
-# import rospy
-# from std_msgs.msg import String
-# import json
+import rospy
+from std_msgs.msg import String, Float32
+from geometry_msgs.msg import PointStamped
+import json
 import Tkinter as tk
 import thread as thread
 import time
 
-# def callback(data):
-#     droneInfo = json.loads(data.data)
-#     print(droneInfo)
+dashboard = None
+start_time = None
 
-def testCall(dashboard):
-    time.sleep(4)
-    dashboard.setBatteryPercentage(1, 45)
+def callback(data):    
+    droneInfo = json.loads(data.data)
+    # Total area
+    percent = droneInfo["all"].get("percent_area", 0)
+    dashboard.setTotalAreaCovered(round((percent * 100), 2))
+
+    percent = droneInfo["all"].get("percent_overlap", 0)
+    dashboard.setPercentageOverlap(round((percent * 100), 2))
+
+    # firefly percent area
+    percent = droneInfo["firefly"].get("percent_area", 0)
+    dashboard.setAreaCovered(0, round((percent * 100), 2))
+
+    # pelican percent area
+    percent = droneInfo["pelican"].get("percent_area", 0)
+    dashboard.setAreaCovered(1, round((percent * 100), 2))
+
+    # hummingbird percent area
+    percent = droneInfo["hummingbird"].get("percent_area", 0)
+    dashboard.setAreaCovered(2, round((percent * 100), 2))
+
+    # iris percent area
+    percent = droneInfo["iris"].get("percent_area", 0)
+    dashboard.setAreaCovered(3, round((percent * 100), 2))
+
+    # neo9 percent area
+    percent = droneInfo["neo9"].get("percent_area", 0)
+    dashboard.setAreaCovered(4, round((percent * 100), 2))
+
+    seconds = (rospy.Time.now() - start_time).secs
+    dashboard.setTimeTaken("{} minues {} seconds".format(seconds/60, seconds%60))
+
+
+def battery_callback(msg, id):
+    dashboard.setBatteryPercentage(id, round(msg.data, 2))
+
+def distance_callback(msg, id):
+    dashboard.setDistanceTravelled(id, round(msg.data, 2))
+
+def position_callback(msg, id):
+    dashboard.setX(id, round(msg.point.x, 2))
+    dashboard.setY(id, round(msg.point.y, 2))
+    dashboard.setZ(id, round(msg.point.z, 2))
+
 
 COLOR_WHITE = '#FFFFFF'
 COLOR_GREY = '#F9F9F9'
@@ -25,15 +66,11 @@ class TotalAreaCoveredWidget(tk.Frame):
     def __init__(self, parent, *args, **kwargs):
         tk.Frame.__init__(self, parent, *args, **kwargs)
         self.label = tk.Label(self, text="Total Area Covered", font=getDefaultFont("15"))
-        self.label.grid(row=0, column=0, sticky='nsew')
+        self.label.grid(row=0, sticky=tk.W)
         self.areaVar = tk.StringVar()
         self.areaVar.set("0.0%")
         self.area = tk.Label(self, textvariable=self.areaVar, font=getDefaultFont("50"))
-        self.area.grid(row=1, column=0, sticky='nsew')
-
-        self.grid_columnconfigure(0, weight=1)
-        self.grid_rowconfigure(0, weight=1)
-        self.grid_rowconfigure(1, weight=1)
+        self.area.grid(row=1, sticky=tk.W)
     
     def setArea(self, area):
         self.areaVar.set(str(area)+"%")
@@ -48,12 +85,13 @@ class CommonInfoWidget(tk.Frame):
         self.overlap.grid(row=0, sticky=tk.W)
         
         self.timeTakenVar = tk.StringVar()
-        self.timeTakenVar.set("Time Taken: 0 min 0 secs")
+        self.timeTakenVar.set("Elapsed Time: 0 min 0 secs")
         self.timeTaken = tk.Label(self, textvariable=self.timeTakenVar, font=getDefaultFont())
         self.timeTaken.grid(row=1, sticky=tk.W)
 
         self.estimatedTimeVar = tk.StringVar()
-        self.estimatedTimeVar.set("Estimated Time To Completion: 0 min 0 secs")
+        # self.estimatedTimeVar.set("Estimated Time To Completion: 0 min 0 secs")
+        self.estimatedTimeVar.set("Number of drones: 0")
         self.estimatedTime = tk.Label(self, textvariable=self.estimatedTimeVar, font=getDefaultFont())
         self.estimatedTime.grid(row=2, sticky=tk.W)
     
@@ -61,31 +99,31 @@ class CommonInfoWidget(tk.Frame):
         self.overlapVar.set("Percentage Overlap: "+str(overlap)+"%")
     
     def setTimeTaken(self, time):
-        self.timeTakenVar.set("Time Taken: ", + time)
+        self.timeTakenVar.set("Elapsed Time: {}".format(time))
 
     
-    def setEstimatedTime(self, time):
-        self.estimatedTimeVar.set("Estimated Time To Completion: " + time)
+    def setEstimatedTime(self, drones):
+        # self.estimatedTimeVar.set("Estimated Time To Completion: " + time)
+        self.estimatedTimeVar.set("Number of drones: " + drones)
     
 
 class TopBar(tk.Frame):
     def __init__(self, parent, *args, **kwargs):
         tk.Frame.__init__(self, parent, *args, **kwargs)
         
-        self.areaWidget = TotalAreaCoveredWidget(self, padx=10, pady=10, bg=COLOR_WHITE)
+        self.areaWidget = TotalAreaCoveredWidget(self, padx=30, pady=30, bg=COLOR_WHITE)
         self.areaWidget.label['bg'] = COLOR_WHITE
         self.areaWidget.area['bg'] = COLOR_WHITE
-        self.areaWidget.grid(row=0, column=0, sticky='nsew')
+        self.areaWidget.grid(row=0, column=0)
 
-        self.commonWidget = CommonInfoWidget(self, padx=10, pady=10, bg=COLOR_GREY)
+        self.commonWidget = CommonInfoWidget(self, padx=30, pady=30, bg=COLOR_GREY)
         self.commonWidget.overlap['bg'] = COLOR_GREY
         self.commonWidget.timeTaken['bg'] = COLOR_GREY
         self.commonWidget.estimatedTime['bg'] = COLOR_GREY
-        self.commonWidget.grid(row=0, column=1, sticky='nsew')
+        self.commonWidget.grid(row=0, column=1)
         
-        self.rowconfigure(0, weight=1)
         self.columnconfigure(0, weight=1)
-        self.columnconfigure(1, weight=4)
+        self.columnconfigure(0, weight=2)
     
     def setTotalAreaCovered(self, area):
         self.areaWidget.setArea(area)
@@ -124,12 +162,12 @@ class DroneInfoWidget(tk.Frame):
         self.area = tk.Label(self, textvariable=self.areaVar, font=getDefaultFont("12", style=''), bg=bgLabels)
         self.area.grid(row=2, column=1)
 
-        self.fovLabel = tk.Label(self, text="Field of View: ", font=getDefaultFont("12"), bg=bgLabels)
-        self.fovLabel.grid(row=3, column=0, sticky=tk.W)
-        self.fovVar = tk.StringVar()
-        self.fovVar.set("0")
-        self.fov = tk.Label(self, textvariable=self.fovVar, font=getDefaultFont("12", style=''), bg=bgLabels)
-        self.fov.grid(row=3, column=1)
+        self.dtLabel = tk.Label(self, text="Distance Travelled: ", font=getDefaultFont("12"), bg=bgLabels)
+        self.dtLabel.grid(row=3, column=0, sticky=tk.W)
+        self.dtVar = tk.StringVar()
+        self.dtVar.set("0")
+        self.dt = tk.Label(self, textvariable=self.dtVar, font=getDefaultFont("12", style=''), bg=bgLabels)
+        self.dt.grid(row=3, column=1)
 
         self.velocityLabel = tk.Label(self, text="Velocity: ", font=getDefaultFont("12"), bg=bgLabels)
         self.velocityLabel.grid(row=4, column=0, sticky=tk.W)
@@ -163,18 +201,15 @@ class DroneInfoWidget(tk.Frame):
         self.battery.grid(row=8, column=0)
 
         self.batteryPercentVar = tk.StringVar()
-        self.batteryPercentVar.set("100%")
+        self.batteryPercentVar.set("0%")
         self.batteryPercent = tk.Label(self, textvariable=self.batteryPercentVar, font=getDefaultFont("18"), bg=bgLabels)
-        self.batteryPercent.grid(row=8, column=1, sticky=tk.W)
-
-        self.columnconfigure(0, weight=2)
-        self.columnconfigure(1, weight=3)
+        self.batteryPercent.grid(row=8, column=1)
 
     def setAreaCovered(self, area):
         self.areaVar.set(str(area)+"%")
     
-    def setFov(self, fov):
-        self.fovVar.set(str(fov))
+    def setDistanceTravelled(self, distance):
+        self.dtVar.set(str(distance))
     
     def setVelocity(self, velocity):
         self.velocityVar.set(str(velocity))
@@ -200,15 +235,14 @@ class DroneCollection(tk.Frame):
         self.drones = []
         for i in range(n_drones):
             self.drones.append(DroneInfoWidget(i+1, COLOR_GREY, self, padx=10, pady=5,  bg=COLOR_GREY))
-            self.drones[i].grid(row=0, column=i, padx=5, sticky='nsew')
+            self.drones[i].grid(row=0, column=i, padx=5)
             self.columnconfigure(i, weight=1)
-            self.rowconfigure(0, weight=1)
     
     def setAreaCovered(self, id, area):
         self.drones[id].setAreaCovered(area)
     
-    def setFov(self, id, fov):
-        self.drones[id].setFov(fov)
+    def setDistanceTravelled(self, id, distance):
+        self.drones[id].setDistanceTravelled(distance)
     
     def setVelocity(self, id, velocity):
         self.drones[id].setVelocity(velocity)
@@ -230,14 +264,11 @@ class Dashboard:
         self.app = app
         self.app['bg'] = COLOR_WHITE
         self.n_drones = n_drones
-        self.topbar = TopBar(app, padx=10, pady=10, bg=COLOR_WHITE)
-        self.topbar.grid(row=0, column=0, sticky='nsew')
+        self.topbar = TopBar(app, padx=30, pady=30, bg=COLOR_WHITE)
+        self.topbar.pack(side=tk.TOP, fill=tk.X)
 
         self.droneCollection = DroneCollection(n_drones, app, padx=30, pady=30, bg=COLOR_WHITE)
-        self.droneCollection.grid(row=1, column=0, sticky='nsew')
-        self.app.grid_rowconfigure(0, weight=1)
-        self.app.grid_rowconfigure(1, weight=1)
-        self.app.grid_columnconfigure(0, weight=1)
+        self.droneCollection.pack(side=tk.BOTTOM, fill=tk.X)
 
     def setTotalAreaCovered(self, area):
         self.topbar.setTotalAreaCovered(area)
@@ -255,8 +286,8 @@ class Dashboard:
     def setAreaCovered(self, id, area):
         self.droneCollection.setAreaCovered(id, area)
     
-    def setFov(self, id, fov):
-        self.droneCollection.setFov(id, fov)
+    def setDistanceTravelled(self, id, distance):
+        self.droneCollection.setDistanceTravelled(id, distance)
     
     def setVelocity(self, id, velocity):
         self.droneCollection.setVelocity(id, velocity)
@@ -274,11 +305,32 @@ class Dashboard:
         self.droneCollection.setBatteryPercentage(id, percent)
 
 if __name__ == '__main__':
-    # rospy.init_node('dashboard', anonymous=True)
-    # rospy.Subscriber("/drone/info", String, callback)
+    rospy.init_node('dashboard', anonymous=True)
+    start_time = rospy.Time.now()
 
     app = tk.Tk()
-    app.geometry("1280x700")
-    dashboard = Dashboard(app, 4)
-    thread.start_new_thread(testCall, (dashboard,))
+    app.title("Dashboard")
+    app.geometry("1152x700")
+    dashboard = Dashboard(app, 5)
+
+    rospy.Subscriber("/drone_coverage_metrics", String, callback)
+
+    rospy.Subscriber("/firefly/battery", Float32, battery_callback, 0)
+    rospy.Subscriber("/pelican/battery", Float32, battery_callback, 1)
+    rospy.Subscriber("/hummingbird/battery", Float32, battery_callback, 2)
+    rospy.Subscriber("/iris/battery", Float32, battery_callback, 3)
+    rospy.Subscriber("/neo9/battery", Float32, battery_callback, 4)
+
+    rospy.Subscriber("/firefly/distance_travelled", Float32, distance_callback, 0)
+    rospy.Subscriber("/pelican/distance_travelled", Float32, distance_callback, 1)
+    rospy.Subscriber("/hummingbird/distance_travelled", Float32, distance_callback, 2)
+    rospy.Subscriber("/iris/distance_travelled", Float32, distance_callback, 3)
+    rospy.Subscriber("/neo9/distance_travelled", Float32, distance_callback, 4)
+
+    rospy.Subscriber("/firefly/ground_truth/position", PointStamped, position_callback, 0)
+    rospy.Subscriber("/pelican/ground_truth/position", PointStamped, position_callback, 1)
+    rospy.Subscriber("/hummingbird/ground_truth/position", PointStamped, position_callback, 2)
+    rospy.Subscriber("/iris/ground_truth/position", PointStamped, position_callback, 3)
+    rospy.Subscriber("/neo9/ground_truth/position", PointStamped, position_callback, 4)
+
     app.mainloop()
