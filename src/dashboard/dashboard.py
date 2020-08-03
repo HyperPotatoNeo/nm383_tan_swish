@@ -1,11 +1,12 @@
 #!/usr/bin/env python
 import rospy
 from std_msgs.msg import String, Float32
-from geometry_msgs.msg import PointStamped
+from nav_msgs.msg import Odometry
 import json
 import Tkinter as tk
 import thread as thread
 import time
+from math import sqrt
 
 dashboard = None
 start_time = None
@@ -18,6 +19,8 @@ def callback(data):
 
     percent = droneInfo["all"].get("percent_overlap", 0)
     dashboard.setPercentageOverlap(round((percent * 100), 2))
+
+    dashboard.n_drones = droneInfo["all"].get("n_drones",0)
 
     # firefly percent area
     percent = droneInfo["firefly"].get("percent_area", 0)
@@ -49,10 +52,13 @@ def battery_callback(msg, id):
 def distance_callback(msg, id):
     dashboard.setDistanceTravelled(id, round(msg.data, 2))
 
-def position_callback(msg, id):
-    dashboard.setX(id, round(msg.point.x, 2))
-    dashboard.setY(id, round(msg.point.y, 2))
-    dashboard.setZ(id, round(msg.point.z, 2))
+def odom_callback(msg, id):
+    dashboard.setX(id, round(msg.pose.pose.position.x, 2))
+    dashboard.setY(id, round(msg.pose.pose.position.y, 2))
+    dashboard.setZ(id, round(msg.pose.pose.position.z, 2))
+
+    vel = sqrt((msg.twist.twist.linear.x ** 2 + msg.twist.twist.linear.x ** 2)/2)
+    dashboard.setVelocity(id, round(abs(vel), 2))
 
 
 COLOR_WHITE = '#FFFFFF'
@@ -141,12 +147,30 @@ class BatteryIndicator(tk.Canvas):
     def __init__(self, parent, *args, **kwargs):
         tk.Canvas.__init__(self, parent, width=60, height=120, *args, **kwargs)
         self.create_rectangle(10, 20, 50, 120, fill=COLOR_BATTERY)
+
+    def getPercentColor(self, percent):
+        RED = (220, 0, 0)
+        YELLOW = (255, 220, 0)
+        GREEN = (30, 203, 149)
+        if(percent >= 80):
+            return COLOR_BATTERY
+        elif(percent <= 20):
+            return "#%02x%02x%02x" % RED
+        elif(percent >= 50):
+            percent = ((percent - 50) * 2) / 100.0
+            colorval = [int((1 - percent) * i + (percent * j)) for i,j in zip(YELLOW, GREEN)]
+            return "#%02x%02x%02x" % tuple(colorval)
+        else:
+            percent = ((50 - percent) * 2) / 100.0
+            colorval = [int((1 - percent) * i + (percent * j)) for i,j in zip(YELLOW, RED)]
+            return "#%02x%02x%02x" % tuple(colorval)
+
     
     def setBatteryPercentage(self, percent):
         iPercent = int(percent)
         startY = 100 - iPercent + 20 
         self.delete('all')
-        self.create_rectangle(10, startY, 50, 120, fill=COLOR_BATTERY)
+        self.create_rectangle(10, startY, 50, 120, fill=self.getPercentColor(percent))
 
 
 class DroneInfoWidget(tk.Frame):
@@ -327,10 +351,10 @@ if __name__ == '__main__':
     rospy.Subscriber("/iris/distance_travelled", Float32, distance_callback, 3)
     rospy.Subscriber("/neo9/distance_travelled", Float32, distance_callback, 4)
 
-    rospy.Subscriber("/firefly/ground_truth/position", PointStamped, position_callback, 0)
-    rospy.Subscriber("/pelican/ground_truth/position", PointStamped, position_callback, 1)
-    rospy.Subscriber("/hummingbird/ground_truth/position", PointStamped, position_callback, 2)
-    rospy.Subscriber("/iris/ground_truth/position", PointStamped, position_callback, 3)
-    rospy.Subscriber("/neo9/ground_truth/position", PointStamped, position_callback, 4)
+    rospy.Subscriber("/firefly/ground_truth/odometry", Odometry, odom_callback, 0)
+    rospy.Subscriber("/pelican/ground_truth/odometry", Odometry, odom_callback, 1)
+    rospy.Subscriber("/hummingbird/ground_truth/odometry", Odometry, odom_callback, 2)
+    rospy.Subscriber("/iris/ground_truth/odometry", Odometry, odom_callback, 3)
+    rospy.Subscriber("/neo9/ground_truth/odometry", Odometry, odom_callback, 4)
 
     app.mainloop()
