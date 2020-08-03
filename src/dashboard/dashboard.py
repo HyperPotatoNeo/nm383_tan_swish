@@ -17,10 +17,11 @@ def callback(data):
     percent = droneInfo["all"].get("percent_area", 0)
     dashboard.setTotalAreaCovered(round((percent * 100), 2))
 
-    percent = droneInfo["all"].get("percent_overlap", 0)
+    percent = droneInfo["all"].get("overlap_area", 0)
     dashboard.setPercentageOverlap(round((percent * 100), 2))
 
-    dashboard.n_drones = droneInfo["all"].get("n_drones",0)
+    percent = droneInfo["all"].get("n_drones",0)
+    dashboard.setEstimatedTime(percent)
 
     # firefly percent area
     percent = droneInfo["firefly"].get("percent_area", 0)
@@ -110,7 +111,7 @@ class CommonInfoWidget(tk.Frame):
     
     def setEstimatedTime(self, drones):
         # self.estimatedTimeVar.set("Estimated Time To Completion: " + time)
-        self.estimatedTimeVar.set("Number of drones: " + drones)
+        self.estimatedTimeVar.set("Number of drones: {}".format(drones))
     
 
 class TopBar(tk.Frame):
